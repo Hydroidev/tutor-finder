@@ -1,13 +1,41 @@
+<!DOCTYPE html>
 <html>
   <head>
-    <title>Google Sheets API Quickstart</title>
+    <title>CI Tutor Finder</title>
     <meta charset="utf-8" />
   </head>
   <body>
-    <p>Google Sheets API Quickstart</p>
+    <h1>CI Tutor Finder</h1>
 
     <pre id="content" style="white-space: pre-wrap;"></pre>
 
+    <label for="course-sub">Select the course id:</label>
+    
+    <div>
+      <select name="course-sub" id="course-sub">
+        <option value="COMP">COMP</option>
+        <option value="PHYS">PHYS</option>
+      </select>
+      <select name="course-num" id="course-num">
+        <option value="262">262</option>
+        <option value="499">499</option>
+      </select>
+    </div>
+
+    <button type="button" onclick="displayTutors()">See Tutors!</button>
+
+    <div>
+      <table id="timetable" style="display:none">
+        <caption><strong>Tutor Availability</strong></caption>
+        <thead>
+          <tr>
+            <th>MONDAY</th>
+            <th>TUESDAY</th>
+          </tr>
+        </thead>
+      </table>
+    </div>
+    
     <script type="text/javascript">
       /**
        * Script modified from Google example; removes all OAuth flow credentials
@@ -16,16 +44,30 @@
        */
 
       // API key from the Developer Console
-      var API_KEY = 'AIzaSyBEcAKt2scDQ6WGsmIuubznqv3qZu0Zh40';
+      const API_KEY = 'AIzaSyBEcAKt2scDQ6WGsmIuubznqv3qZu0Zh40';
 
       // Array of API discovery doc URLs for APIs used by the quickstart
-      var DISCOVERY_DOCS = ["https://sheets.googleapis.com/$discovery/rest?version=v4"];
+      const DISCOVERY_DOCS = ["https://sheets.googleapis.com/$discovery/rest?version=v4"];
+
+      // Define the spreadsheet ids
+      // const stemSheetID = '1X24YuZOEkUqT7qWKM8t_g_tvXmGL4nss';
+      const stemSheetID = '1IndeWlRySoNuQXwMFqSZFY0KAJNr2aHSHR77cRfI16I';
+      const humanitiesSheetID = '1ABioELILpA4uBVCqlqFBxCs1zIMmLz80';  // <- xslx format
+      const specialtiesSheetID = '1vje4JcWWgUsCAJA7DhEeRfPdI0AJjHP9ECToWULqClI';
+
+      const NAME_SEP = '/';
+
+      const DAY_NAMES = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"];
+      const NUM_DAYS = DAY_NAMES.length;
+      const TIME_INFO_RANGE = "!A3:K25";  // Each row is a different time; columns represent subjects
+      const SPECIALTIES_RANGE = "!A4:B";  // Column A has the Course ID; Col B has tutor names for that course
 
       /**
        *  On load, called to load the auth2 library and API client library.
        */
       function handleClientLoad() {
-        gapi.load('client:auth2', initClient);
+        // gapi.load('client:auth2', initClient);
+        gapi.load('client', initClient);
       }
 
       /**
@@ -37,10 +79,16 @@
           apiKey: API_KEY,
           discoveryDocs: DISCOVERY_DOCS,
         }).then(function () {
-          listMajors();
+          getTutorAvailability().then(tutorTimes => console.log(tutorTimes));
+          getTutorSpecialties().then(tutorAval => console.log(tutorAval));
         }, function(error) {
           appendPre(JSON.stringify(error, null, 2));
         });
+      }
+
+      function displayTutors() {
+        var table = document.getElementById('timetable');
+        table.style.display = 'inherit';
       }
 
       /**
@@ -56,28 +104,140 @@
       }
 
       /**
-       * Print the names and majors of students in a sample spreadsheet:
-       * https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit
+       * Strip whitespace and unnecessary special characters from names
+       *  for easier comparison across spreadsheets
        */
-      function listMajors() {
-        gapi.client.sheets.spreadsheets.values.get({
-          spreadsheetId: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms',
-          range: 'Class Data!A2:E',
-        }).then(function(response) {
-          var range = response.result;
-          if (range.values.length > 0) {
-            appendPre('Name, Major:');
-            for (i = 0; i < range.values.length; i++) {
-              var row = range.values[i];
-              // Print columns A and E, which correspond to indices 0 and 4.
-              appendPre(row[0] + ', ' + row[4]);
-            }
-          } else {
-            appendPre('No data found.');
-          }
-        }, function(response) {
-          appendPre('Error: ' + response.result.error.message);
+      function slagName(str) {
+        return str.match(/[^\s/](?:[^/]*[^\s/])?/)[0].replace(/[-.'*]/, '');
+      }
+
+      /**
+       * Returns the timetable of which tutors are available at which time
+       * Time is the first dimension, followed by weekday, returning an array of names
+       * (e.g. timeTable[time][weekDay] => ["Person 1", ...])
+       */
+      async function getTutorAvailability() {
+        dayRanges = DAY_NAMES.map(dayName => dayName+TIME_INFO_RANGE);
+        var resp = await gapi.client.sheets.spreadsheets.values.batchGet({
+          spreadsheetId: stemSheetID,
+          ranges: dayRanges
         });
+        var timesByDay = resp.result.valueRanges;
+        var table = document.getElementById('timetable');
+        var tutorTimes = {};
+
+        for (var dayValues of timesByDay) {
+          var i = 0;
+          var hour = "";
+          do {
+            hour = dayValues.values[i++][0];
+          } while (!hour)
+          // console.log(`First Hour of ${dayValues.range.match(/\w+/)[0]}: ${hour}`);
+        }
+
+        // Go through each day's data and pull information on what tutors are available when
+        for (var dayValues of timesByDay) {
+          var dayName = dayValues.range.match(/\w+/)[0];
+          // Traverse each subarray (representing the different times) and collect a set of names
+          for (var hourData of dayValues.values) {
+            var [time, ...tutors] = hourData;
+            // Skip rows with no value in the first column (means it's not a row containing times)
+            if (!time || time == "" || time.search(/^[0-9]/) < 0) continue;
+            // Create dict if needed
+            tutorTimes[time] ??= {};
+            // Remove empty cells and duplicates (convert to set and back)
+            tutors = [...new Set(tutors.filter(s => typeof(s) == "string" && s.length > 0)
+            // Split names apart at separator and reduce to single level array
+              .reduce((a,s) => a.concat(s.split('/')), new Array())
+            // Clean up names so they are easier to compare / more uniform
+              .map(slagName))];
+            // Add tutors to the proper day and time in our information table
+            if (tutors.length == 1 && tutors[0].search(/CLOSE/i) >= 0) {
+              console.debug(`${dayName} at ${time} thrown out; only tutors were: ${tutors}`)
+              continue;
+            }
+            tutorTimes[time][dayName] = tutors;
+            // console.log(`Tutors available ${dayName} at ${time}: ${tutors}`);
+          }
+        }
+        // for (x in tutorTimes) {console.log(`${x} : ${tutorTimes[x]}`);}
+        // Display the final table built
+        return tutorTimes;
+      }
+
+      /**
+      * Returns the timetable of which tutors are available at which time
+      * Time is the first dimension, followed by weekday, returning an array of names
+      * (e.g. timeTable[time][weekDay] => ["Person 1", ...])
+      */
+      async function getTutorSpecialties() {
+        
+        // Get the title of each worksheet, representing available subjects
+        resp = await gapi.client.sheets.spreadsheets.get({
+          spreadsheetId: specialtiesSheetID,
+        });
+
+        var availableSubjectsRange = resp.result.sheets.map(s => s.properties['title']+SPECIALTIES_RANGE);
+
+        // Get all of the worksheets
+        resp = await gapi.client.sheets.spreadsheets.values.batchGet({
+          spreadsheetId: specialtiesSheetID,
+          ranges: availableSubjectsRange,
+        });
+
+        var tutorsBySubject = resp.result.valueRanges;
+        var tutorSpecialties = {};
+
+        // Iterate over the pages 
+        for (subject of tutorsBySubject) {
+          // Iterate over each course listed
+          for (course of subject.values) {
+            // Skip adding courses with no tutors listed
+            if (course.length < 2) {
+              console.debug(`No tutors found for: ${course}`)
+              continue;
+            }
+            // First parse through the tutors, since we'll be adding them to
+            //  the potentially multiple courses listed on each line
+            var tutors = course[1].split(',').map(slagName);
+
+            /* Now we must separate the course IDs into sensible parts.
+             * The IDs are written in a decently parseable way by default, but
+             *  we need some special care to make sure we grab all possible
+             *  combinations listed
+             * For instance, sometimes two courses are listed together separated
+             *  by an &; sometimes courses are cross listed and will need to have
+             *  multiple subjects attributed to the same number
+             * The overall structure looks like:  SUB / SUB NUM & SUB NUM - TITLE;
+             * In order to allow for ignorable whitespace, regex is partially used
+             **/
+            
+            // Start by iterating over each separate course as marked by '&'
+            for (individualCourse of course[0].split('-',1)[0].split('&')) {
+              // Parse into subjects and number parts
+              courseParts = individualCourse.match(/(?<sub>[a-z/ ]+?)\s*(?<num>[0-9]+)\s*$/i);
+              // If there are no matches, then we assume the entry is not a valid course
+              // While I'd like the timetable to offer broad subjects as well, it is too
+              //  complicated to program that for this version
+              if (!courseParts) continue;
+              // Set the numerical part
+              var courseNumber = courseParts.groups['num'];
+              // Get the neatly formatted subjects
+              var courseSubjects = courseParts.groups['sub'].split('/').map(s => s.match(/\w+/i)[0]);
+              // Now add the tutors to each combo of subject and number given
+              for (subjectCode of courseSubjects) {
+                // Make new structures if they don't yet exist
+                tutorSpecialties[subjectCode] ??= {};
+                tutorSpecialties[subjectCode][courseNumber] ??= new Array();
+                // Add the tutors listed; this is written assuming someone will
+                //  one day accidentally write the same course in two separate
+                //  places, at which point the code will still work beautifully
+                tutorSpecialties[subjectCode][courseNumber] = tutorSpecialties[subjectCode][courseNumber].concat(tutors);
+              }
+            }
+          }
+        }
+        return tutorSpecialties;
       }
 
     </script>
