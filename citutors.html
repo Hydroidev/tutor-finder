@@ -7,22 +7,20 @@
   <body>
     <h1>CI Tutor Finder</h1>
 
-    <pre id="content" style="white-space: pre-wrap;"></pre>
-
-    <label for="course-sub">Select the course id:</label>
+    <pre id="content" style="white-space: pre-wrap;">Please wait for the information to load...</pre>
     
-    <div>
-      <select name="course-sub" id="course-sub">
-        <option value="COMP">COMP</option>
-        <option value="PHYS">PHYS</option>
-      </select>
-      <select name="course-num" id="course-num">
-        <option value="262">262</option>
-        <option value="499">499</option>
-      </select>
+    <div id="course-selection" style="visibility:hidden">
+      <label for="course-sub">Select the course id:</label>
+      <div>
+        <select name="course-sub" id="course-sub" onchange="updateCourseNumDropdown();"></select>
+        <select name="course-num" id="course-num"></select>
+      </div>
+      <button type="button" onclick="displayTutors()">See Tutors!</button>
     </div>
 
-    <button type="button" onclick="displayTutors()">See Tutors!</button>
+    <!-- This is only a temporary div to display really basic information
+        about available tutors that is easy to format -->
+    <ul id="temp-tutor-display"></ul>
 
     <div>
       <table id="timetable" style="display:none">
@@ -50,10 +48,13 @@
       const DISCOVERY_DOCS = ["https://sheets.googleapis.com/$discovery/rest?version=v4"];
 
       // Define the spreadsheet ids
-      // const stemSheetID = '1X24YuZOEkUqT7qWKM8t_g_tvXmGL4nss';
-      const stemSheetID = '1IndeWlRySoNuQXwMFqSZFY0KAJNr2aHSHR77cRfI16I';
-      const humanitiesSheetID = '1ABioELILpA4uBVCqlqFBxCs1zIMmLz80';  // <- xslx format
-      const specialtiesSheetID = '1vje4JcWWgUsCAJA7DhEeRfPdI0AJjHP9ECToWULqClI';
+      const specialtiesSheetID = '1vje4JcWWgUsCAJA7DhEeRfPdI0AJjHP9ECToWULqClI';  // Who does what?
+      const timesheetIDs = [  // When are they available?
+        '1IndeWlRySoNuQXwMFqSZFY0KAJNr2aHSHR77cRfI16I',  // STEM Tutor Schedule
+        // '12sBx4Q3S6_C_NQ3R3oe4izdDs9HoFZrc2oxjInOpafQ',  // Humanities Tutor Schedule
+        // ^ Currently has parsing problems; consider including the range in this
+        //  structure instead of the TIME_INFO_RANGE const
+      ]
 
       const NAME_SEP = '/';
 
@@ -62,6 +63,8 @@
       const TIME_INFO_RANGE = "!A3:K25";  // Each row is a different time; columns represent subjects
       const SPECIALTIES_RANGE = "!A4:B";  // Column A has the Course ID; Col B has tutor names for that course
 
+      var tutorAvailability;
+      var tutorSpecialties;
       /**
        *  On load, called to load the auth2 library and API client library.
        */
@@ -79,16 +82,138 @@
           apiKey: API_KEY,
           discoveryDocs: DISCOVERY_DOCS,
         }).then(function () {
-          getTutorAvailability().then(tutorTimes => console.log(tutorTimes));
-          getTutorSpecialties().then(tutorAval => console.log(tutorAval));
+          getTutorAvailability().then(tutorAvail => console.debug(tutorAvailability = tutorAvail));
+          getTutorSpecialties().then(tutorSpec => {
+            // Print out the object for testing in console
+            console.debug(tutorSpecialties = tutorSpec);
+
+            // Replace the loading message with the dropdowns
+            var selectionDiv = document.getElementById("course-selection");
+            selectionDiv.style["visibility"] = "inherit";
+            document.getElementById("content").innerHTML = "";
+
+            // Make the first dropdown reflect the available subjects according to
+            //  the object we just collected
+            updateCourseSubDropdown();
+            updateCourseNumDropdown();
+          });
         }, function(error) {
           appendPre(JSON.stringify(error, null, 2));
         });
       }
 
       function displayTutors() {
-        var table = document.getElementById('timetable');
-        table.style.display = 'inherit';
+        // var table = document.getElementById('timetable');
+        // table.style.display = 'inherit';
+        
+        // The HTML structure to write the info to
+        var table = document.getElementById('temp-tutor-display');
+        table.innerHTML = "";
+        var instruct = document.createElement('p');
+        instruct.innerHTML = "Click on each day and time to expand the list of available tutors!";
+        table.appendChild(instruct);
+
+        // The course subject and number as input by the student
+        var courseSub = document.getElementById("course-sub").value;
+        var courseNum = document.getElementById("course-num").value;
+
+        // Temporary variable for storing well structured data
+        //  in the form day -> time -> tutor
+        var tutorStructure = {};
+
+        // Get the available tutors and the times they can be found in the LRC
+        for (tutor of tutorSpecialties[courseSub][courseNum]) {
+          // console.debug(`Testing ${tutor} for compatibility`);
+          for (time in tutorAvailability) {
+            for (day in tutorAvailability[time]) {
+              // console.debug(`Testing ${tutor} at ${time} on ${day} for compatibility`);
+              // Search the available tutors for that day and time to see
+              //  if the known supporting tutor works at that time
+              if (tutorAvailability[time][day].some( e => tutor.search(e) >= 0 )) {
+                // Make time pretty with AM/PM
+                // let timePretty = prettyTime(time);
+                // Create element and add to the list
+                // var e = document.createElement("li");
+                // e.innerHTML = `<strong>${timePretty}</strong> on <strong>${day}</strong>, <strong>${tutor}</strong> tutors ${courseSub} ${courseNum}`;
+                // table.appendChild(e);
+
+                // Add this day, time, and tutor to our structure
+                // Make sure each of these exists in the right location first
+                tutorStructure[day] ??= {};
+                tutorStructure[day][time] = (tutorStructure[day][time]) ?
+                  tutorStructure[day][time].concat(tutor) :
+                  [tutor];
+              }
+            }
+          }
+        }
+        // Now print the tutors neatly
+        for (day of DAY_NAMES) {
+          // Avoid days that don't exist in the structure
+          // Using DAY_NAMES allows us to print the days in order
+          if (!tutorStructure[day]) continue;
+          // Make our list item for the day, complete with click event
+          let d = document.createElement('li');
+          d.addEventListener("click", e => toggleCollapse(e.target))
+          d.innerHTML = day;
+          // Create the list group child where times will be added
+          let dList = document.createElement('ul');
+          dList.style.display = "none";
+          // Now add each available time
+          for (time in tutorStructure[day]) {
+            // Make our list item for the timeslot, complete with click event
+            let t = document.createElement('li');
+            t.innerHTML = prettyTime(time);
+          // Create the list group child where tutor's names will be added
+            let tList = document.createElement('ul');
+            tList.style.display = "none";
+            for (tutor of tutorStructure[day][time]) {
+              let e = document.createElement('li');
+              e.innerHTML = tutor;
+              tList.appendChild(e);
+            }
+            t.appendChild(tList);
+            dList.appendChild(t);
+          }
+          d.appendChild(dList);
+          table.appendChild(d);
+        }
+      }
+
+      function updateCourseSubDropdown() {
+        // Get the dropdown so we can write to it
+        var courseSubDropdown = document.getElementById("course-sub");
+
+        // Change the first dropdown to reflect appropriate course subjects
+        courseSubDropdown.innerHTML = "";
+        for (sub in tutorSpecialties) {
+          var e = document.createElement("option");
+          e.value = e.text = sub;
+          courseSubDropdown.appendChild(e);
+        }
+      }
+
+      function updateCourseNumDropdown() {
+        // Get the dropdowns so we can read and write values from them
+        var courseSubDropdown = document.getElementById("course-sub");
+        var courseNumDropdown = document.getElementById("course-num");
+
+        // Change the second dropdown to reflect appropriate course numbers
+        //  for the selected subject
+        courseNumDropdown.innerHTML = "";
+        for (num in tutorSpecialties[courseSubDropdown.value]) {
+          var e = document.createElement("option");
+          e.value = e.text = num;
+          courseNumDropdown.appendChild(e);
+        }
+      }
+
+      // Make list items collapsable
+      function toggleCollapse(elem) {
+        if (!(ul = elem.firstElementChild)) return;
+        ul.style.display = (ul.style.display == "none") ?
+          "block" :
+          "none";
       }
 
       /**
@@ -108,56 +233,68 @@
        *  for easier comparison across spreadsheets
        */
       function slagName(str) {
-        return str.match(/[^\s/](?:[^/]*[^\s/])?/)[0].replace(/[-.'*]/, '');
+        return str.match(/[^\s/](?:[^/]*[^\s/])?/)[0].replace(/[-.'*]/, '').toUpperCase();
       }
 
+      // Takes a time and makes it pretty in 12 hour ("10" -> "10 AM")
+      // Specifically makes all times < 10 into PM times
+      function prettyTime(str) {
+        let numericalHour = Number(str.split(':')[0])
+        return (numericalHour < 10) ? time+' PM' : time+' AM';
+      }
       /**
        * Returns the timetable of which tutors are available at which time
        * Time is the first dimension, followed by weekday, returning an array of names
        * (e.g. timeTable[time][weekDay] => ["Person 1", ...])
        */
       async function getTutorAvailability() {
-        dayRanges = DAY_NAMES.map(dayName => dayName+TIME_INFO_RANGE);
-        var resp = await gapi.client.sheets.spreadsheets.values.batchGet({
-          spreadsheetId: stemSheetID,
-          ranges: dayRanges
-        });
-        var timesByDay = resp.result.valueRanges;
         var table = document.getElementById('timetable');
         var tutorTimes = {};
 
-        for (var dayValues of timesByDay) {
-          var i = 0;
-          var hour = "";
-          do {
-            hour = dayValues.values[i++][0];
-          } while (!hour)
-          // console.log(`First Hour of ${dayValues.range.match(/\w+/)[0]}: ${hour}`);
-        }
+        dayRanges = DAY_NAMES.map(dayName => dayName+TIME_INFO_RANGE);
+        for (sheetID of timesheetIDs) {
+          var resp = await gapi.client.sheets.spreadsheets.values.batchGet({
+            spreadsheetId: sheetID,
+            ranges: dayRanges
+          });
 
-        // Go through each day's data and pull information on what tutors are available when
-        for (var dayValues of timesByDay) {
-          var dayName = dayValues.range.match(/\w+/)[0];
-          // Traverse each subarray (representing the different times) and collect a set of names
-          for (var hourData of dayValues.values) {
-            var [time, ...tutors] = hourData;
-            // Skip rows with no value in the first column (means it's not a row containing times)
-            if (!time || time == "" || time.search(/^[0-9]/) < 0) continue;
-            // Create dict if needed
-            tutorTimes[time] ??= {};
-            // Remove empty cells and duplicates (convert to set and back)
-            tutors = [...new Set(tutors.filter(s => typeof(s) == "string" && s.length > 0)
-            // Split names apart at separator and reduce to single level array
-              .reduce((a,s) => a.concat(s.split('/')), new Array())
-            // Clean up names so they are easier to compare / more uniform
-              .map(slagName))];
-            // Add tutors to the proper day and time in our information table
-            if (tutors.length == 1 && tutors[0].search(/CLOSE/i) >= 0) {
-              console.debug(`${dayName} at ${time} thrown out; only tutors were: ${tutors}`)
-              continue;
+          var timesByDay = resp.result.valueRanges;
+
+          // for (var dayValues of timesByDay) {
+          //   var i = 0;
+          //   var hour = "";
+          //   do {
+          //     hour = dayValues.values[i++][0];
+          //   } while (!hour)
+          //   // console.log(`First Hour of ${dayValues.range.match(/\w+/)[0]}: ${hour}`);
+          // }
+
+          // Go through each day's data and pull information on what tutors are available when
+          for (var dayValues of timesByDay) {
+            var dayName = dayValues.range.match(/\w+/)[0];
+            // Traverse each subarray (representing the different times) and collect a set of names
+            for (var hourData of dayValues.values) {
+              var [time, ...tutors] = hourData;
+              // Skip rows with no value in the first column (means it's not a row containing times)
+              if (!time || time == "" || time.search(/^[0-9]/) < 0) continue;
+              // Create dict if needed
+              tutorTimes[time] ??= {};
+              // Remove empty cells and duplicates (convert to set and back)
+              tutors = [...new Set(tutors.filter(s => typeof(s) == "string" && s.length > 0)
+              // Split names apart at separator and reduce to single level array
+                .reduce((a,s) => a.concat(s.split('/')), new Array())
+              // Clean up names so they are easier to compare / more uniform
+                .map(slagName))];
+              // Add tutors to the proper day and time in our information table
+              if (tutors.length == 1 && tutors[0].search(/CLOSE/i) >= 0) {
+                console.debug(`${dayName} at ${time} thrown out; only tutors were: ${tutors}`)
+                continue;
+              }
+              tutorTimes[time][dayName] = (tutorTimes[time][dayName]) ?
+                tutorTimes[time][dayName].concat(tutors) :
+                tutors;
+              // console.log(`Tutors available ${dayName} at ${time}: ${tutors}`);
             }
-            tutorTimes[time][dayName] = tutors;
-            // console.log(`Tutors available ${dayName} at ${time}: ${tutors}`);
           }
         }
         // for (x in tutorTimes) {console.log(`${x} : ${tutorTimes[x]}`);}
@@ -166,9 +303,9 @@
       }
 
       /**
-      * Returns the timetable of which tutors are available at which time
-      * Time is the first dimension, followed by weekday, returning an array of names
-      * (e.g. timeTable[time][weekDay] => ["Person 1", ...])
+      * Returns the table of what tutors work for each course
+      * Course subject is the first dimension, followed by the course number
+      * (e.g. specialtyTable[sub][num] => ["Person 1", ...])
       */
       async function getTutorSpecialties() {
         
@@ -223,7 +360,7 @@
               // Set the numerical part
               var courseNumber = courseParts.groups['num'];
               // Get the neatly formatted subjects
-              var courseSubjects = courseParts.groups['sub'].split('/').map(s => s.match(/\w+/i)[0]);
+              var courseSubjects = courseParts.groups['sub'].split('/').map(s => s.match(/\w+/i)[0].toUpperCase());
               // Now add the tutors to each combo of subject and number given
               for (subjectCode of courseSubjects) {
                 // Make new structures if they don't yet exist
