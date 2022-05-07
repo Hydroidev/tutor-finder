@@ -1,28 +1,92 @@
 <!DOCTYPE html>
 <html>
-  <head>
+  <head lang="en">
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+    
+    <!-- Custom Theme CSS, courtesy of https://bootstrapcolors.com/ -->
+    <link href="ci-theme.css" rel="stylesheet">
+
     <title>CI Tutor Finder</title>
+
     <meta charset="utf-8" />
   </head>
   <body>
-    <h1>CI Tutor Finder</h1>
-
-    <pre id="content" style="white-space: pre-wrap;">Please wait for the information to load...</pre>
-    
-    <div id="course-selection" style="visibility:hidden">
-      <label for="course-sub">Select the course id:</label>
-      <div>
-        <select name="course-sub" id="course-sub" onchange="updateCourseNumDropdown();"></select>
-        <select name="course-num" id="course-num"></select>
+    <!-- Navigation bar for that clean look -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+      <div class="container-fluid">
+        <a class="navbar-brand" href="#">CI Tutor Finder</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarSupportedContent">
+          <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+            <li class="nav-item">
+              <a class="nav-link active" aria-current="page" href="#">Home</a>
+            </li>
+            <!-- <li class="nav-item">
+              <a class="nav-link" href="#">About</a>
+            </li> -->
+          </ul>
+        </div>
       </div>
-      <button type="button" onclick="displayTutors()">See Tutors!</button>
+    </nav>
+
+    <noscript>
+      <div class="container alert alert-ci border border-ci border-2 my-2 text-center" role="alert">
+          In order to load tutor schedules, this website requires JavaScript.<br/>
+          Your browser either does not support JavaScript or its use has been blocked on this page, possibly by an extension.
+      </div>
+    </noscript>
+    
+    <!-- Loading animation while tutor information is being grabbed from Google Sheets -->
+    <div class="container text-center">
+      <pre id="content" style="white-space: pre-wrap;"></pre>
+      <div id="loading-bay" class="d-flex align-items-center">
+        <strong>Loading tutor information...</strong>
+        <div class="spinner-border ms-auto" role="status" aria-hidden="true"></div>
+      </div>
+    </div>
+    
+    <!-- The main form for selecting a course to find help in -->
+    <div class="container-sm" id="course-selection" style="visibility:hidden">
+      <div class="row">
+        <legend>Select the course id</legend>
+      </div>
+      <div class="row">
+        <div class="col-md">
+          <div class="form-floating">
+            <select class="form-select" name="course-sub" id="course-sub" onchange="updateCourseNumDropdown();" aria-label="Dropdown for Course Subject"></select>
+            <label for="course-sub">Subject</label>
+          </div>
+        </div>
+        <div class="col-sm">
+          <div class="form-floating">
+            <select class="form-select" name="course-num" id="course-num" aria-label="Dropdown for Course Number"></select>
+            <label for="course-num">Number</label>
+          </div>
+        </div>
+      </div>
+      <div class="form-text text-center">If you don't see your course listed, then we don't have any tutors available for that course!</div>
+      <div class="row justify-content-md-center p-2">
+        <div class="col text-center">
+          <button class="btn btn-ci" type="button" onclick="displayTutors()">See Tutors!</button>
+        </div>
+      </div>
+      </div>
     </div>
 
     <!-- This is only a temporary div to display really basic information
         about available tutors that is easy to format -->
-    <ul id="temp-tutor-display"></ul>
+    <div class="container-md text-center">
+      <ul id="temp-tutor-display"></ul>
+    </div>
 
-    <div>
+    <div class="container">
       <table id="timetable" style="display:none">
         <caption><strong>Tutor Availability</strong></caption>
         <thead>
@@ -89,8 +153,8 @@
 
             // Replace the loading message with the dropdowns
             var selectionDiv = document.getElementById("course-selection");
-            selectionDiv.style["visibility"] = "inherit";
-            document.getElementById("content").innerHTML = "";
+            selectionDiv.style.visibility = "inherit";
+            document.getElementById("loading-bay").classList.add("visually-hidden");
 
             // Make the first dropdown reflect the available subjects according to
             //  the object we just collected
