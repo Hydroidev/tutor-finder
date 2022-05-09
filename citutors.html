@@ -14,6 +14,31 @@
     <title>CI Tutor Finder</title>
 
     <meta charset="utf-8" />
+
+    <style>
+      table#timetable, table#timetable td, table#timetable tr {
+        border: 1px solid black;
+        background-color: #ced4da;
+        cursor: default;
+      }
+      table#timetable th {
+        padding-left: .5rem;
+        padding-right: .5rem;
+      }
+      table#timetable tr > th {
+        font-size: small;
+      }
+      td.available {
+        background-color: #a3cfbb !important;
+        font-weight: bold;
+      }
+      td:hover {
+        box-shadow: inset 0 0 100px 100px rgba(0,0,255,0.1);
+      }
+      td.notutor {
+        background-color: white !important;
+      }
+    </style>
   </head>
   <body>
     <!-- Navigation bar for that clean look -->
@@ -36,6 +61,7 @@
       </div>
     </nav>
 
+    <!-- Blurb for when clientside JavaScript is unavailable -->
     <noscript>
       <div class="container alert alert-ci border border-ci border-2 my-2 text-center" role="alert">
           In order to load tutor schedules, this website requires JavaScript.<br/>
@@ -46,63 +72,73 @@
     <!-- Loading animation while tutor information is being grabbed from Google Sheets -->
     <div class="container text-center">
       <pre id="content" style="white-space: pre-wrap;"></pre>
-      <div id="loading-bay" class="d-flex align-items-center">
+      <div id="loadingBay" class="d-flex align-items-center">
         <strong>Loading tutor information...</strong>
         <div class="spinner-border ms-auto" role="status" aria-hidden="true"></div>
       </div>
     </div>
-    
-    <!-- The main form for selecting a course to find help in -->
-    <div class="container-sm" id="course-selection" style="visibility:hidden">
-      <div class="row">
-        <legend>Select the course id</legend>
-      </div>
-      <div class="row">
-        <div class="col-md">
-          <div class="form-floating">
-            <select class="form-select" name="course-sub" id="course-sub" onchange="updateCourseNumDropdown();" aria-label="Dropdown for Course Subject"></select>
-            <label for="course-sub">Subject</label>
+
+    <main id="mainShowOnLoad" style="visibility: hidden">
+      <!-- The main form for selecting a course to find help in -->
+      <div class="container-sm" id="course-selection">
+        <div class="row">
+          <h4>Step 1: Select the course id</h4>
+        </div>
+        <div class="row">
+          <div class="col-md">
+            <div class="form-floating">
+              <select class="form-select" name="course-sub" id="course-sub" onchange="updateCourseNumDropdown();" aria-label="Dropdown for Course Subject"></select>
+              <label for="course-sub">Subject</label>
+            </div>
+          </div>
+          <div class="col-sm">
+            <div class="form-floating">
+              <select class="form-select" name="course-num" id="course-num" aria-label="Dropdown for Course Number"></select>
+              <label for="course-num">Number</label>
+            </div>
           </div>
         </div>
-        <div class="col-sm">
-          <div class="form-floating">
-            <select class="form-select" name="course-num" id="course-num" aria-label="Dropdown for Course Number"></select>
-            <label for="course-num">Number</label>
+        <div class="form-text text-center">If you don't see your course listed, then we don't have any tutors available for that course!</div>
+        <div class="row justify-content-md-center p-2">
+          <div class="col text-center">
+            <button class="btn btn-ci" type="button" onclick="displayTutors()">Update Tutors!</button>
+          </div>
+        </div>
+        </div>
+      </div>
+
+      <!-- Show tutor information as as a custom dynamically built table -->
+      <div class="container-md">
+        <div class="card text-center">
+          <div class="card-header">
+            <strong>Tutors available: <span id="tutorNames">(Mouseover a time to see tutors listed here!)</span></strong>
+          </div>
+          <div class="card-body">
+            <h4>Step 2: Mouseover or click to see the available tutors:</h4>
+            <!-- Tutor information goes in the following div! -->  
+            <table id="timetable" class="text-center" style="width: 100%">
+              <thead>
+                <!-- Day names are dynamically added here -->
+                <tr>
+                  <th alt="Time Slots"></th>
+                </tr>
+              </thead>
+              <!-- The rows for each time listing are added here -->
+              <caption><strong>Green (Yes): Available | White (No): Not available | Gray (X): LRC Closed</strong></caption>
+            </table>
+          </div>
+          <div class="card-footer text-center">
+            <div>Tutors are available on a first-come first-served basis; please visit the <a href="https://www.csuci.edu/learningresourcecenter/">LRC Website</a> or join the <a href="https://csuci.zoom.us/my/lrczoom">virtual LRC meeting</a> for more information</div>
           </div>
         </div>
       </div>
-      <div class="form-text text-center">If you don't see your course listed, then we don't have any tutors available for that course!</div>
-      <div class="row justify-content-md-center p-2">
-        <div class="col text-center">
-          <button class="btn btn-ci" type="button" onclick="displayTutors()">See Tutors!</button>
-        </div>
-      </div>
-      </div>
-    </div>
-
-    <!-- This is only a temporary div to display really basic information
-        about available tutors that is easy to format -->
-    <div class="container-md text-center">
-      <ul id="temp-tutor-display"></ul>
-    </div>
-
-    <div class="container">
-      <table id="timetable" style="display:none">
-        <caption><strong>Tutor Availability</strong></caption>
-        <thead>
-          <tr>
-            <th>MONDAY</th>
-            <th>TUESDAY</th>
-          </tr>
-        </thead>
-      </table>
-    </div>
+    </main>
     
     <script type="text/javascript">
       /**
-       * Script modified from Google example; removes all OAuth flow credentials
-       * and scope as only public API is needed (only API key required for this)
-       * See <https://developers.google.com/sheets/api/quickstart/js>
+       * Some of the basic GAPI code is borrowed from the tutorial, but is heavily
+       *  modified as only public API is needed (just the API key required for this)
+       *  See <https://developers.google.com/sheets/api/quickstart/js>
        */
 
       // API key from the Developer Console
@@ -127,8 +163,14 @@
       const TIME_INFO_RANGE = "!A3:K25";  // Each row is a different time; columns represent subjects
       const SPECIALTIES_RANGE = "!A4:B";  // Column A has the Course ID; Col B has tutor names for that course
 
+      const AVAILABLE_TEXT = "Yes";
+      const NOTUTOR_TEXT = "No";
+      const CLOSED_TEXT = "X";
+
       var tutorAvailability;
       var tutorSpecialties;
+
+      var allTimeTableData = new Set();
       /**
        *  On load, called to load the auth2 library and API client library.
        */
@@ -141,7 +183,7 @@
        *  Initializes the API client library and sets up sign-in state
        *  listeners.
        */
-      function initClient() {
+      async function initClient() {
         gapi.client.init({
           apiKey: API_KEY,
           discoveryDocs: DISCOVERY_DOCS,
@@ -152,9 +194,9 @@
             console.debug(tutorSpecialties = tutorSpec);
 
             // Replace the loading message with the dropdowns
-            var selectionDiv = document.getElementById("course-selection");
-            selectionDiv.style.visibility = "inherit";
-            document.getElementById("loading-bay").classList.add("visually-hidden");
+            var selectionDiv = document.getElementById("mainShowOnLoad");
+            selectionDiv.style.visibility = "unset";
+            document.getElementById("loadingBay").classList.add("visually-hidden");
 
             // Make the first dropdown reflect the available subjects according to
             //  the object we just collected
@@ -167,81 +209,71 @@
       }
 
       function displayTutors() {
-        // var table = document.getElementById('timetable');
-        // table.style.display = 'inherit';
-        
-        // The HTML structure to write the info to
-        var table = document.getElementById('temp-tutor-display');
-        table.innerHTML = "";
-        var instruct = document.createElement('p');
-        instruct.innerHTML = "Click on each day and time to expand the list of available tutors!";
-        table.appendChild(instruct);
+        // Reset all elements
+        allTimeTableData.forEach(e => {
+          // replace should only fail if the object already has 'notutor' class on it
+          e.classList.replace("available", "notutor");
+          e.innerHTML = NOTUTOR_TEXT;
+          e.tutors.clear();
+        });
 
         // The course subject and number as input by the student
-        var courseSub = document.getElementById("course-sub").value;
-        var courseNum = document.getElementById("course-num").value;
+        let courseSub = document.getElementById("course-sub").value;
+        let courseNum = document.getElementById("course-num").value;
 
-        // Temporary variable for storing well structured data
-        //  in the form day -> time -> tutor
-        var tutorStructure = {};
+        // tutorAvailability[time][day].some(e => tutor.search(e) >= 0)
 
-        // Get the available tutors and the times they can be found in the LRC
-        for (tutor of tutorSpecialties[courseSub][courseNum]) {
-          // console.debug(`Testing ${tutor} for compatibility`);
-          for (time in tutorAvailability) {
-            for (day in tutorAvailability[time]) {
-              // console.debug(`Testing ${tutor} at ${time} on ${day} for compatibility`);
-              // Search the available tutors for that day and time to see
-              //  if the known supporting tutor works at that time
-              if (tutorAvailability[time][day].some( e => tutor.search(e) >= 0 )) {
-                // Make time pretty with AM/PM
-                // let timePretty = prettyTime(time);
-                // Create element and add to the list
-                // var e = document.createElement("li");
-                // e.innerHTML = `<strong>${timePretty}</strong> on <strong>${day}</strong>, <strong>${tutor}</strong> tutors ${courseSub} ${courseNum}`;
-                // table.appendChild(e);
+        // Get all tutors appropriate for the course requested
+        let appropriateTutors = tutorSpecialties[courseSub][courseNum];
 
-                // Add this day, time, and tutor to our structure
-                // Make sure each of these exists in the right location first
-                tutorStructure[day] ??= {};
-                tutorStructure[day][time] = (tutorStructure[day][time]) ?
-                  tutorStructure[day][time].concat(tutor) :
-                  [tutor];
-              }
-            }
-          }
+        let tutorNames = Object.keys(tutorAvailability);
+        
+        /* Find the corresponding tutors in the availability list */
+        const findClosestTutor = tutorName => {
+          // For now this function just checks that a name is found somewhere
+          //  in one of the entry names with a regex, in case there are extra
+          //  characters somewhere that weren't removed whilst slagging
+          return tutorNames.find(name => name.match(tutorName)) ??
+            tutorNames.find(name => tutorName.match(name));
         }
-        // Now print the tutors neatly
-        for (day of DAY_NAMES) {
-          // Avoid days that don't exist in the structure
-          // Using DAY_NAMES allows us to print the days in order
-          if (!tutorStructure[day]) continue;
-          // Make our list item for the day, complete with click event
-          let d = document.createElement('li');
-          d.addEventListener("click", e => toggleCollapse(e.target))
-          d.innerHTML = day;
-          // Create the list group child where times will be added
-          let dList = document.createElement('ul');
-          dList.style.display = "none";
-          // Now add each available time
-          for (time in tutorStructure[day]) {
-            // Make our list item for the timeslot, complete with click event
-            let t = document.createElement('li');
-            t.innerHTML = prettyTime(time);
-          // Create the list group child where tutor's names will be added
-            let tList = document.createElement('ul');
-            tList.style.display = "none";
-            for (tutor of tutorStructure[day][time]) {
-              let e = document.createElement('li');
-              e.innerHTML = tutor;
-              tList.appendChild(e);
+        // While we don't require a wrapper func to make this work, the idea
+        //  is to abstract the algorithm for finding the closest name so
+        //  that it can be replaced with something better later
+
+        let availableTimeSlotElements = new Set();
+        // Gets all the table data elements we need to modify, stores into 
+        for (let tutor of appropriateTutors) {
+          let tableData = tutorAvailability[tutor];
+          // This may fail if the names are not spelled exactly the same
+          //  If that is the case, we should attempt to find the closest name
+          if (!tableData) {
+            let closestName = findClosestTutor(tutor);
+            console.debug(closestName);
+            // If our 'better' algorithm still cannot find a matching tutor, we should
+            //  return an error and continue to the next tutor
+            if (!closestName) {
+              console.error(`No available tutor found matching '${tutor}'!\nPlease check the spreadsheets!`);
+              continue;
             }
-            t.appendChild(tList);
-            dList.appendChild(t);
+            // Otherwise, use the correct name and get the elements
+            tableData = tutorAvailability[closestName];
           }
-          d.appendChild(dList);
-          table.appendChild(d);
+          // Now that the elements are found, we want to add them to our set of
+          //  unique elements to modify; this set keeps us from wasting function
+          //  calls to set the table data elements to a "true" state
+          tableData.forEach(d => {
+            availableTimeSlotElements.add(d);
+            d.tutors.add(tutor);
+          });
         }
+        
+        // Now iterate over all elements representing available time slots
+        availableTimeSlotElements.forEach(d => {
+          d.classList.replace("notutor", "available");
+          d.innerHTML = AVAILABLE_TEXT;
+
+        });
+        
       }
 
       function updateCourseSubDropdown() {
@@ -280,6 +312,15 @@
           "none";
       }
 
+      // Show tutors in the underlying element
+      function showTutorNames(elem) {
+        // This should only change for table data elements
+        if (elem.target.tagName != 'TD') return;
+        // The table data is given hidden information regarding the available tutors
+        let tutorNameElement = document.getElementById("tutorNames");
+        tutorNameElement.innerHTML = [...elem.target.tutors].sort().join(", ") || "No Tutors Available";
+      }
+
       /**
        * Append a pre element to the body containing the given message
        * as its text node. Used to display the results of the API call.
@@ -297,14 +338,50 @@
        *  for easier comparison across spreadsheets
        */
       function slagName(str) {
-        return str.match(/[^\s/](?:[^/]*[^\s/])?/)[0].replace(/[-.'*]/, '').toUpperCase();
+        return str.match(/[^\s/](?:[^/]*[^\s/])?/)[0]
+          .replace(/[^\s\w]/, '')
+          .replace(/\s+/, ' ')
+          .toUpperCase();
+      }
+
+      // Takes a string in format hh[:mm] and returns the hour and minute composed as a single number
+      function parseTimeString(tstr) {
+        var [numericalHour, numericalMinute] = tstr.split(':').map(Number);
+        numericalMinute ??= 0;
+        return numericalHour * 100 + numericalMinute;
+      }
+
+      // Takes two strings in format hh[:mm] and compares if the first is less than the second
+      function timeLessThan(t1, t2) {
+        // Turn both values into numbers
+        let t1Num = parseTimeString(t1);
+        let t2Num = parseTimeString(t2);
+        // Compare
+        return t1Num < t2Num;
+      }
+
+      // Takes two strings in format hh[:mm] and compares if the first is greater than the second
+      function timeGreaterThan(t1, t2) {
+        // Turn both values into numbers
+        let t1Num = parseTimeString(t1);
+        let t2Num = parseTimeString(t2);
+        // Compare
+        return t1Num > t2Num;
+      }
+
+      // Takes two strings in format hh[:mm] and compares if they are equal
+      function timeEqual(t1, t2) {
+        // Turn both values into numbers
+        let t1Num = parseTimeString(t1);
+        let t2Num = parseTimeString(t2);
+        // Compare
+        return t1Num == t2Num;
       }
 
       // Takes a time and makes it pretty in 12 hour ("10" -> "10 AM")
       // Specifically makes all times < 10 into PM times
-      function prettyTime(str) {
-        let numericalHour = Number(str.split(':')[0])
-        return (numericalHour < 10) ? time+' PM' : time+' AM';
+      function prettyTime(tstr) {
+        return (timeLessThan(tstr,"10") || timeEqual(tstr, "12")) ? tstr+' PM' : tstr+' AM';
       }
       /**
        * Returns the timetable of which tutors are available at which time
@@ -324,15 +401,6 @@
 
           var timesByDay = resp.result.valueRanges;
 
-          // for (var dayValues of timesByDay) {
-          //   var i = 0;
-          //   var hour = "";
-          //   do {
-          //     hour = dayValues.values[i++][0];
-          //   } while (!hour)
-          //   // console.log(`First Hour of ${dayValues.range.match(/\w+/)[0]}: ${hour}`);
-          // }
-
           // Go through each day's data and pull information on what tutors are available when
           for (var dayValues of timesByDay) {
             var dayName = dayValues.range.match(/\w+/)[0];
@@ -349,11 +417,12 @@
                 .reduce((a,s) => a.concat(s.split('/')), new Array())
               // Clean up names so they are easier to compare / more uniform
                 .map(slagName))];
-              // Add tutors to the proper day and time in our information table
+              // Skip entries that don't contain tutors
               if (tutors.length == 1 && tutors[0].search(/CLOSE/i) >= 0) {
                 console.debug(`${dayName} at ${time} thrown out; only tutors were: ${tutors}`)
                 continue;
               }
+              // Add tutors to the proper day and time in our information table
               tutorTimes[time][dayName] = (tutorTimes[time][dayName]) ?
                 tutorTimes[time][dayName].concat(tutors) :
                 tutors;
@@ -361,9 +430,81 @@
             }
           }
         }
-        // for (x in tutorTimes) {console.log(`${x} : ${tutorTimes[x]}`);}
-        // Display the final table built
-        return tutorTimes;
+
+        /* Create a time table in HTML and matching Object*/
+        // This table object has tutors for its entrie, connected to a
+        //  list of DOM table data elements that represent the times that they work
+        // e.g. timeTable["BENJAMIN"] returns a list of table data elements
+        // This way we can quickly update the table visuals for each available tutor
+        let timeTable = new Object();
+        // Start by ordering the times correctly
+        let orderedTimes = Object.keys(tutorTimes).sort(timeGreaterThan);
+        // All times before 10 are actually PM times, so we need to move those after
+        let startAM = orderedTimes.findIndex(e => !timeLessThan(e, "10"));
+        orderedTimes = orderedTimes.slice(startAM).concat(orderedTimes.slice(0, startAM));
+
+        // Then get the table element to work on
+        let tableElem = document.getElementById("timetable");
+
+        // Add all the day names as headers
+        let headerRow = tableElem.tHead.children[0];
+        
+        for (var day of DAY_NAMES) {
+          let e = document.createElement('th');
+          e.innerHTML = day.slice(0,3);
+          headerRow.appendChild(e);
+        }
+
+        // Now we can build both the HTML table and the corresponding timeTable
+        for (var time of orderedTimes) {
+          let timeRow = document.createElement('tr');        
+          // Add a row line to show the time
+          let timeHeader = document.createElement('th');
+          timeHeader.innerHTML = time;
+          timeRow.appendChild(timeHeader);
+          for (var day of DAY_NAMES) {
+            // We need to use DAY_NAMES in order to keep the data organized in the table correctly
+            let dataElement = document.createElement('td');
+            dataElement.innerHTML = "X";
+            dataElement.tutors = new Set();
+            
+            // The LRC hours are different for each day, so the following is only for time slots
+            //  where the LRC is actually open; these are given an actual background color
+            //  and stored in the timeTable structure.
+            if (tutorTimes[time][day]){
+              // Add the created table element to each applicable tutor's entry
+              for (let tutor of tutorTimes[time][day]) {
+                tutor = slagName(tutor);
+                timeTable[tutor] ??= new Array();
+                timeTable[tutor].push(dataElement);
+                
+                // Also add to the set of time table elements
+                allTimeTableData.add(dataElement);
+              }
+              dataElement.innerHTML = "No";
+              dataElement.classList.add("notutor");
+            }
+            else {
+              dataElement.tutors.add("LRC Closed");
+            }
+            // In either case, we still need to add it as a child of the row
+            timeRow.appendChild(dataElement);
+
+            // Make our list item for the day, complete with click event
+            // let d = document.createElement('li');
+            // d.addEventListener("click", e => toggleCollapse(e.target))
+            // d.setAttribute("role", "button");
+            // d.style.cursor = "pointer";
+          }
+          tableElem.appendChild(timeRow);
+        }
+
+        // Make the table responsive to mouse over and clicks
+        tableElem.onmouseover = showTutorNames;
+        tableElem.onmouseup = showTutorNames;
+
+        // Return the final table built
+        return timeTable;
       }
 
       /**
