@@ -243,28 +243,32 @@
         let availableTimeSlotElements = new Set();
         // Gets all the table data elements we need to modify, stores into 
         for (let tutor of appropriateTutors) {
-          let tableData = tutorAvailability[tutor];
-          // This may fail if the names are not spelled exactly the same
-          //  If that is the case, we should attempt to find the closest name
-          if (!tableData) {
-            let closestName = findClosestTutor(tutor);
-            console.debug(closestName);
-            // If our 'better' algorithm still cannot find a matching tutor, we should
-            //  return an error and continue to the next tutor
-            if (!closestName) {
-              console.error(`No available tutor found matching '${tutor}'!\nPlease check the spreadsheets!`);
-              continue;
+          try {
+            let tableData = tutorAvailability[tutor];
+            // This may fail if the names are not spelled exactly the same
+            //  If that is the case, we should attempt to find the closest name
+            if (!tableData) {
+              let closestName = findClosestTutor(tutor);
+              console.debug(closestName);
+              // If our 'better' algorithm still cannot find a matching tutor, we should
+              //  return an error and continue to the next tutor
+              if (!closestName) {
+                console.error(`No available tutor found matching '${tutor}'!\nPlease check the spreadsheets!`);
+                continue;
+              }
+              // Otherwise, use the correct name and get the elements
+              tableData = tutorAvailability[closestName];
             }
-            // Otherwise, use the correct name and get the elements
-            tableData = tutorAvailability[closestName];
+            // Now that the elements are found, we want to add them to our set of
+            //  unique elements to modify; this set keeps us from wasting function
+            //  calls to set the table data elements to a "true" state
+            tableData.forEach(d => {
+              availableTimeSlotElements.add(d);
+              d.tutors.add(tutor);
+            });
+          } catch (e) {
+            console.error(e);
           }
-          // Now that the elements are found, we want to add them to our set of
-          //  unique elements to modify; this set keeps us from wasting function
-          //  calls to set the table data elements to a "true" state
-          tableData.forEach(d => {
-            availableTimeSlotElements.add(d);
-            d.tutors.add(tutor);
-          });
         }
         
         // Now iterate over all elements representing available time slots
@@ -339,8 +343,8 @@
        */
       function slagName(str) {
         return str.match(/[^\s/](?:[^/]*[^\s/])?/)[0]
-          .replace(/[^\s\w]/, '')
-          .replace(/\s+/, ' ')
+          .replaceAll(/[^\s\w]/g, '')
+          .replaceAll(/\s+/g, ' ')
           .toUpperCase();
       }
 
